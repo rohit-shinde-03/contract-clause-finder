@@ -1,0 +1,20 @@
+services:
+  tika:
+    image: apache/tika:latest
+    ports:
+      - "9998:9998"
+  chroma:
+    image: ghcr.io/chroma-core/chroma:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data/chroma:/chroma
+    environment:
+      CHROMA_SERVER_HOST: "0.0.0.0"
+      CHROMA_SERVER_HTTP_PORT: 8000
+      CHROMA_DB_IMPL: "duckdb+parquet"
+      CHROMA_DB_DIR: "/chroma"
+
+networks:
+  default:
+    name: ccf-net

@@ -1,0 +1,124 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+env/
+ENV/
+venv/
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*,cover
+*.py,cover
+.hypothesis/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Data folders
+data/
+
+# Logs
+*.log
+
+# Docker
+docker-compose.override.yml
+
+# Chroma on-disk store
+data/chroma/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# ========================
+# Python bytecode & caches
+# ========================
+**/__pycache__/
+**/*.py[cod]
+*$py.class
+
+# ========================
+# Virtual envs (anywhere)
+# ========================
+**/.venv/
+**/venv/
+**/env/
+**/ENV/
+
+# ========================
+# Data & model artifacts
+# ========================
+/data/
+/data/**
+
+# Chroma on-disk DB
+/data/chroma/
+
+# ========================
+# IDEs and editors
+# ========================
+.vscode/
+.idea/
+*.sublime-*
+
+# ========================
+# Logs
+# ========================
+*.log
+
+# ========================
+# Docker
+# ========================
+docker-compose.override.yml
+
+# ========================
+# OS files
+# ========================
+.DS_Store
+Thumbs.db
