@@ -5,7 +5,7 @@
 
 ---
 
-## 🚀 Project Overview
+## 🤖 Project Overview
 
 A Retrieval-Augmented Generation (RAG) system to ingest PDF contracts, index their clauses, and serve a Q&A API for fast, precise legal clause lookup.
 
