@@ -3,19 +3,24 @@ from pathlib import Path
 import httpx
 from chromadb import HttpClient
 from typing import List
-
+import subprocess
+import sys
 app = FastAPI(title="CCF Ingest & Search Service")
 
 # —— Resolve project-root paths —— #
 BASE_DIR = Path(__file__).resolve().parent.parent  # points to contract-clause-finder/
 TEXT_DIR = BASE_DIR / "data" / "text"
-
+ML_SCRIPT = BASE_DIR / "ml" / "embed_contract.py"
 # —— Tika config —— #
 TIKA_URL = "http://localhost:9998/tika"
 
 # —— Chroma client & collection —— #
 chroma_client = HttpClient(host="localhost", port=8000)
-collection = chroma_client.get_collection("contracts")
+# use get_or_create so we never hit “not found”
+collection    = chroma_client.get_or_create_collection(
+    name="contracts",
+    metadata={"description": "All ingested contract chunks"}
+)
 
 
 @app.post("/ingest")
@@ -45,12 +50,21 @@ async def ingest_contract(pdf: UploadFile = File(...)):
     txt_path = TEXT_DIR / f"{pdf.filename}.txt"
     txt_path.write_text(text, encoding="utf-8")
 
+    # Spawn embed script in the background
+    # Uses same Python interpreter to run ml/embed_contract.py
+    subprocess.Popen([
+        sys.executable,
+        str(ML_SCRIPT),
+        str(txt_path)
+    ])
+
     # Return a short snippet and save path
     snippet = text[:500] + ("…" if len(text) > 500 else "")
     return {
         "filename": pdf.filename,
         "text_snippet": snippet,
-        "saved_to": str(txt_path.relative_to(BASE_DIR))
+        "saved_to": str(txt_path.relative_to(BASE_DIR)),
+        "embedding_started": True
     }
 
 
