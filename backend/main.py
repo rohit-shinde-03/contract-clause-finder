@@ -5,7 +5,12 @@ from chromadb import HttpClient
 from typing import List
 import subprocess
 import sys
+from sentence_transformers import SentenceTransformer
+
 app = FastAPI(title="CCF Ingest & Search Service")
+
+# load the exact same embedder you used in ml/embed_contract.py
+embedder = SentenceTransformer("nlpaueb/legal-bert-small-uncased")
 
 # —— Resolve project-root paths —— #
 BASE_DIR = Path(__file__).resolve().parent.parent  # points to contract-clause-finder/
@@ -71,26 +76,31 @@ async def ingest_contract(pdf: UploadFile = File(...)):
 @app.get("/search")
 async def search_clauses(
     q: str = Query(..., description="Search query"),
-    n_results: int = Query(5, description="Number of results to return")
+    n_results: int = Query(5, description="Number of results")
 ):
-    """
-    Search for relevant contract clauses matching the query.
-    """
-    # Query Chroma for top-n nearest chunks
+    # 1) Build query embedding (512 dims)
+    query_emb = embedder.encode([q], convert_to_numpy=True).tolist()
+
+    # 2) Get a fresh client + collection
+    client     = HttpClient(host="localhost", port=8000)
+    collection = client.get_or_create_collection(
+        name="contracts_bert",
+        metadata={"description": "Legal-BERT embeddings"}
+    )
+
+    # 3) Query by embeddings instead of raw text
     results = collection.query(
-        query_texts=[q],
+        query_embeddings=query_emb,
         n_results=n_results
     )
 
-    hits: List[dict] = []
-    for idx, doc in enumerate(results['documents'][0]):
+    # 4) Package up the hits
+    hits = []
+    for idx, doc in enumerate(results["documents"][0]):
         hits.append({
-            "chunk_id": results['ids'][0][idx],
-            "text": doc,
-            "metadata": results['metadatas'][0][idx]
+            "chunk_id": results["ids"][0][idx],
+            "text":     doc,
+            "metadata": results["metadatas"][0][idx]
         })
 
-    return {
-        "query": q,
-        "results": hits
-    }
+    return {"query": q, "results": hits}

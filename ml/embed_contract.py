@@ -5,14 +5,14 @@ from typing import List
 
 import chromadb
 from chromadb import HttpClient
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer, models
 import tiktoken
 
 
 # —— Configuration —— #
 TIKA_TEXT_DIR = "../data/text/"       # where full-text .txt files live
 CHROMA_COLLECTION = "contracts"
-EMBED_MODEL_NAME = "all-MiniLM-L6-v2"
+EMBED_MODEL_NAME = "nlpaueb/legal-bert-small-uncased"
 CHUNK_SIZE_TOKENS = 500
 CHUNK_OVERLAP_TOKENS = 50
 
@@ -37,8 +37,16 @@ def chunk_text(text: str) -> List[str]:
 
 
 def embed_and_store(file_id: str, chunks: List[str]):
-    # Initialize SentenceTransformer
-    model = SentenceTransformer(EMBED_MODEL_NAME)
+    # Build a custom SentenceTransformer pipeline:
+    word_embedding_model = models.Transformer(
+        model_name_or_path="nlpaueb/legal-bert-small-uncased",
+        max_seq_length=512
+    )
+    pooling_model = models.Pooling(
+        word_embedding_model.get_word_embedding_dimension(),
+        pooling_mode_mean_tokens=True
+    )
+    model = SentenceTransformer(modules=[word_embedding_model, pooling_model])
 
     # Init Chroma client (HTTP API on localhost:8000)
 
@@ -47,8 +55,10 @@ def embed_and_store(file_id: str, chunks: List[str]):
         port=8000
     )
 
-    # Create or get collection
-    collection = client.get_or_create_collection(CHROMA_COLLECTION)
+    collection = client.get_or_create_collection(
+    name="contracts_bert",
+    metadata={"description": "Legal-BERT embeddings of contracts"}
+    )
 
     # Generate embeddings in batches
     embeddings = model.encode(chunks, show_progress_bar=True, convert_to_numpy=True)
