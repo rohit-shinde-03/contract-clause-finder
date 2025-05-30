@@ -1,93 +1,77 @@
-import os
+#!/usr/bin/env python3
 import sys
 import uuid
+from pathlib import Path
 from typing import List
 
-import chromadb
 from chromadb import HttpClient
 from sentence_transformers import SentenceTransformer, models
 import tiktoken
-
+import torch
 
 # —— Configuration —— #
-TIKA_TEXT_DIR = "../data/text/"       # where full-text .txt files live
-CHROMA_COLLECTION = "contracts"
-EMBED_MODEL_NAME = "nlpaueb/legal-bert-small-uncased"
-CHUNK_SIZE_TOKENS = 500
+BASE_DIR           = Path(__file__).resolve().parent.parent
+TEXT_DIR           = BASE_DIR / "data" / "text"
+CHROMA_COLLECTION  = "contracts_bert"
+EMBED_MODEL_NAME   = "nlpaueb/legal-bert-small-uncased"
+CHUNK_SIZE_TOKENS  = 500
 CHUNK_OVERLAP_TOKENS = 50
 
-
 def load_text(path: str) -> str:
-    with open(path, "r", encoding="utf-8") as f:
-        return f.read()
-
+    return Path(path).read_text(encoding="utf-8")
 
 def chunk_text(text: str) -> List[str]:
-    """Split text into overlapping chunks by token count."""
-    tokenizer = tiktoken.get_encoding("cl100k_base")
-    tokens = tokenizer.encode(text)
-    chunks = []
-    start = 0
+    enc    = tiktoken.get_encoding("cl100k_base")
+    tokens = enc.encode(text)
+    chunks, start = [], 0
     while start < len(tokens):
         end = min(start + CHUNK_SIZE_TOKENS, len(tokens))
-        chunk_tokens = tokens[start:end]
-        chunks.append(tokenizer.decode(chunk_tokens))
+        chunks.append(enc.decode(tokens[start:end]))
         start += CHUNK_SIZE_TOKENS - CHUNK_OVERLAP_TOKENS
     return chunks
 
-
-def embed_and_store(file_id: str, chunks: List[str]):
-    # Build a custom SentenceTransformer pipeline:
-    word_embedding_model = models.Transformer(
-        model_name_or_path="nlpaueb/legal-bert-small-uncased",
-        max_seq_length=512
+def load_fp16_embedder(model_name: str) -> SentenceTransformer:
+    # FP16 transformer backbone
+    transformer = models.Transformer(
+        model_name_or_path=model_name,
+        model_args={"torch_dtype": torch.float16}
     )
-    pooling_model = models.Pooling(
-        word_embedding_model.get_word_embedding_dimension(),
+    pooling = models.Pooling(
+        transformer.get_word_embedding_dimension(),
         pooling_mode_mean_tokens=True
     )
-    model = SentenceTransformer(modules=[word_embedding_model, pooling_model])
+    return SentenceTransformer(modules=[transformer, pooling])
 
-    # Init Chroma client (HTTP API on localhost:8000)
+def embed_and_store(file_id: str, chunks: List[str]):
+    model = load_fp16_embedder(EMBED_MODEL_NAME)
+    embs  = model.encode(chunks, show_progress_bar=True, convert_to_numpy=True)
 
-    client = HttpClient(
-        host="localhost",
-        port=8000
-    )
-
+    client     = HttpClient(host="localhost", port=8000)
     collection = client.get_or_create_collection(
-    name="contracts_bert",
-    metadata={"description": "Legal-BERT embeddings of contracts"}
+        name=CHROMA_COLLECTION,
+        metadata={"description": "FP16 Legal-BERT embeddings"}
     )
 
-    # Generate embeddings in batches
-    embeddings = model.encode(chunks, show_progress_bar=True, convert_to_numpy=True)
+    ids       = [f"{file_id}-{i}" for i in range(len(chunks))]
+    metadatas = [{"file_id": file_id, "chunk_index": i} for i in range(len(chunks))]
 
-    # Prepare metadata & IDs
-    ids = [f"{file_id}-{i}" for i in range(len(chunks))]
-    metadata = [{"file_id": file_id, "chunk_index": i} for i in range(len(chunks))]
-
-    # Upsert to Chroma
     collection.upsert(
-        embeddings=embeddings.tolist(),
+        embeddings=embs.tolist(),
         ids=ids,
-        metadatas=metadata,
+        metadatas=metadatas,
         documents=chunks
     )
     print(f"[+] Stored {len(chunks)} chunks for file {file_id}")
 
-
-def main(txt_path: str):
-    # Generate a unique ID for this document
-    file_id = uuid.uuid4().hex
-
-    text = load_text(txt_path)
-    chunks = chunk_text(text)
+def main():
+    if len(sys.argv) != 2:
+        print("Usage: ml/embed_contract.py path/to/text.txt")
+        sys.exit(1)
+    txt_path = sys.argv[1]
+    file_id  = uuid.uuid4().hex
+    text     = load_text(txt_path)
+    chunks   = chunk_text(text)
     embed_and_store(file_id, chunks)
 
-
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage: python embed_contract.py path/to/contract.txt")
-        sys.exit(1)
-    main(sys.argv[1])
+    main()

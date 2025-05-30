@@ -1,42 +1,32 @@
-# frontend/app.py
 import streamlit as st
 import requests
-import time 
 
-API_BASE = "http://localhost:8080"
-
+API = "http://localhost:8080"
 st.title("📑 Contract Clause Finder")
 
-# 1. PDF Upload
-pdf_file = st.file_uploader("Choose a contract PDF", type=["pdf"])
-if pdf_file:
-    # Only ingest when this button is pressed
-    if st.button("Index Document"):
-        with st.spinner("Ingesting…"):
-            files = {"pdf": (pdf_file.name, pdf_file.getvalue(), "application/pdf")}
-            resp = requests.post(f"{API_BASE}/ingest", files=files)
-        if resp.ok:
-            data = resp.json()
-            st.success("Ingestion queued!")
-            st.code(data["text_snippet"][:300] + "…")
-        else:
-            st.error(f"Ingest error: {resp.text}")
+# 1) Ingest
+pdf = st.file_uploader("Choose PDF", type="pdf")
+if pdf and st.button("Index Document"):
+    with st.spinner("Ingesting…"):
+        files = {"pdf": (pdf.name, pdf.getvalue(), "application/pdf")}
+        r = requests.post(f"{API}/ingest", files=files)
+    if r.ok:
+        st.success("Ingest queued!")
+    else:
+        st.error(f"Error: {r.text}")
 
-# 2. Search Interface
-st.header("2. Search Clauses")
-query = st.text_input("Enter search term (e.g. termination)")
-num = st.slider("Max results", 1, 10, 5)
-if st.button("Search") and query:
+# 2) Search
+st.header("Search Clauses")
+q = st.text_input("Term")
+n = st.slider("Max results", 1, 10, 5)
+if q and st.button("Search"):
     with st.spinner("Searching…"):
-        params = {"q": query, "n_results": num}
-        resp = requests.get(f"{API_BASE}/search", params=params)
-    if resp.ok:
-        hits = resp.json().get("results", [])
-        if not hits:
-            st.warning("No matches found.")
-        for hit in hits:
-            st.markdown(f"**Chunk {hit['metadata']['chunk_index']}**")
+        r = requests.get(f"{API}/search", params={"q":q,"n_results":n})
+    if r.ok:
+        for hit in r.json().get("results", []):
+            idx = hit["metadata"].get("chunk_index")
+            st.markdown(f"**Chunk {idx}**")
             st.write(hit["text"])
             st.write("---")
     else:
-        st.error(f"Search error: {resp.text}")
+        st.error(f"{r.status_code}: {r.text}")
